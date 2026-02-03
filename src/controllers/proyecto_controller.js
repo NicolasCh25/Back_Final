@@ -1,7 +1,8 @@
 import Proyecto from "../models/Proyecto.js"
 import { subirImagenCloudinary } from "../helpers/uploadCloudinary.js"
 import mongoose from "mongoose"
-
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const registrarProyecto = async (req, res) => {
     try {
@@ -41,16 +42,31 @@ const registrarProyecto = async (req, res) => {
             creadoPor: req.administradorHeader._id // admin autenticado
         })
 
-        // 3️⃣ Subir imagen a Cloudinary
-        if (req.files?.imagen) {
-            const { secure_url, public_id } =
-                await subirImagenCloudinary(req.files.imagen.tempFilePath, "ProyectosIntegracion")
+       if (req.files?.imagen) {
+    const file = req.files.imagen;
+    
+    // Generar un nombre único para que no se sobrescriban
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const extension = path.extname(file.name);
+    const fileName = 'img-' + uniqueSuffix + extension;
 
-            nuevoProyecto.imagenes.push({
-                secure_url,
-                public_id
-            })
-        }
+    // Obtener la ruta absoluta del directorio actual
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+
+    // Definir dónde se guardará (Carpeta 'public/uploads' en la raíz del backend)
+    const uploadPath = path.join(__dirname, '../public/uploads', fileName);
+
+    // Mover el archivo a esa carpeta
+    await file.mv(uploadPath);
+
+    // Guardar en la base de datos manteniendo la estructura que espera tu Frontend
+    // Usamos una URL completa apuntando a tu servidor local
+    nuevoProyecto.imagenes.push({
+        secure_url: `http://localhost:3000/uploads/${fileName}`, 
+        public_id: fileName // Guardamos el nombre como ID referencia
+    });
+}
 
         // 4️⃣ Guardar en BD
         await nuevoProyecto.save()
@@ -85,14 +101,19 @@ const listarProyectosPorCarrera = async (req, res) => {
   try {
     const { carrera } = req.params
 
-    const proyectos = await Proyecto.find({ carrera })
+    // 🔴 ANTES: Buscaba coincidencia exacta (sensible a mayúsculas)
+    // const proyectos = await Proyecto.find({ carrera })
+
+    // ✅ AHORA: Usamos $regex con 'i' (insensible a mayúsculas/minúsculas)
+    const proyectos = await Proyecto.find({ 
+        carrera: { $regex: carrera, $options: "i" } 
+    })
       .select("-__v -updatedAt")
       .sort({ fecha_realizacion: -1 })
-
       
     if (proyectos.length === 0) {
       return res.status(404).json({
-        msg: "No se encontraron proyectos para esta carrera"
+        msg: `No se encontraron proyectos de ${carrera}`
       })
     }
 
@@ -168,7 +189,7 @@ const eliminarProyecto=async (req,res)=>{
     
 }
 
-
+//Actualizar Proyecto
 const actualizarProyecto = async (req, res) => {
   try {
     const { id } = req.params
