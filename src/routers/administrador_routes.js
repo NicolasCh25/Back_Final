@@ -5,7 +5,7 @@ import { verificarTokenJWT } from '../middlewares/JWT.js'
 const router = Router()
 
 
-router.post('/registro',registro)// Check 
+router.post('/administrador/registro', registro)
 router.get('/confirmar/:token',confirmarMail) //
 
 router.post('/recuperarpassword',recuperarPassword) // Check 
